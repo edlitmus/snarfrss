@@ -51,7 +51,10 @@ func main() {
 	shows := config.Get("shows")
 
 	for _, feed := range feeds.([]interface{}) {
-		rss, _ := fp.ParseURL(feed.(string))
+		rss, err := fp.ParseURL(feed.(string))
+		if err != nil {
+			log.Fatal(err)
+		}
 
 		fmt.Println(rss.Title)
 		for _, item := range rss.Items {
@@ -78,9 +81,11 @@ func sendMagnet(url string, auth string, user string, pass string, link string) 
 	if err != nil {
 		fmt.Println("error:", err)
 	}
-	// fmt.Printf("%s\n", postJSON)
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(postJSON))
+	if err != nil {
+		log.Fatal(err)
+	}
 	authParts := strings.Split(auth, ":")
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Add(strings.Trim(authParts[0], " "), strings.Trim(authParts[1], " "))
@@ -92,7 +97,10 @@ func sendMagnet(url string, auth string, user string, pass string, link string) 
 		log.Fatal(err)
 	}
 	fmt.Printf("%#v\n", resp)
-	_ = resp.Body.Close()
+	err = resp.Body.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	return err
 }
