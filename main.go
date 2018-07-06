@@ -126,6 +126,10 @@ func basicAuth(url string, username string, password string) string {
 	reader := strings.NewReader(string(bodyText))
 	z := html.NewTokenizer(reader)
 
+	return parseCode(z)
+}
+
+func parseCode(z *html.Tokenizer) string {
 	depth := 0
 	for {
 		tt := z.Next()
