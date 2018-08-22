@@ -7,9 +7,13 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
+	"os/user"
+	"path/filepath"
 	"regexp"
 	"strings"
 
+	"github.com/dgraph-io/badger"
 	yaml "github.com/esilva-everbridge/yaml"
 	"github.com/mmcdole/gofeed"
 	"golang.org/x/net/html"
@@ -30,18 +34,16 @@ type Request struct {
 	Arguments Args   `json:"arguments"`
 }
 
+var db *badger.DB
+
 func main() {
 	config := yaml.New()
 
-	buf, err := ioutil.ReadFile("snarf.yml")
-	if err != nil {
-		log.Fatal(err)
-	}
-	err = yamlv2.Unmarshal(buf, &config.Values)
-	if err != nil {
-		log.Fatal(err)
-	}
+	configFile := createConfigPath()
+	configDir := filepath.Dir(configFile)
+	initConfig(configFile, config)
 
+	db = getKVDB(configDir)
 	fp := gofeed.NewParser()
 
 	rpcURL := config.Get("rpc_url").(string)
@@ -61,16 +63,25 @@ func main() {
 			for _, t := range shows.([]interface{}) {
 				r := regexp.MustCompile(fmt.Sprintf("(?i).*?%s.*?", t.(string)))
 
-				if r.MatchString(item.Title) {
+				if r.MatchString(item.Title) && !exists(item.Title) {
 					fmt.Printf("Found: %s\n", item.Title)
 					auth := basicAuth(rpcURL, username, password)
 					err := sendMagnet(rpcURL, auth, username, password, item.Link)
 					if err != nil {
 						log.Println(err)
 					}
+					err = seen(item.Title, "true")
+					if err != nil {
+						log.Println(err)
+					}
 				}
 			}
 		}
+	}
+
+	err := db.Close()
+	if err != nil {
+		log.Fatalf("error closing db: %s", err)
 	}
 }
 
@@ -152,4 +163,59 @@ func parseCode(z *html.Tokenizer) string {
 			}
 		}
 	}
+}
+
+func createConfigPath() string {
+	var usr, _ = user.Current()
+	configFile := filepath.Join(usr.HomeDir, ".config/snarfrss/config.yaml")
+	dir := filepath.Dir(configFile)
+	err := os.MkdirAll(dir, 0700)
+	if err != nil {
+		log.Printf("error creating config file path: %s", err)
+	}
+
+	return configFile
+}
+
+func getKVDB(configDir string) *badger.DB {
+	var err error
+	opts := badger.DefaultOptions
+	opts.Dir = fmt.Sprintf("%s/db", configDir)
+	opts.ValueDir = fmt.Sprintf("%s/db", configDir)
+	db, err = badger.Open(opts)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return db
+}
+
+func initConfig(configFile string, config *yaml.Yaml) {
+	buf, err := ioutil.ReadFile(configFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = yamlv2.Unmarshal(buf, &config.Values)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func seen(k string, v string) error {
+	err := db.Update(func(txn *badger.Txn) error {
+		err := txn.Set([]byte(k), []byte(v))
+		return err
+	})
+	return err
+}
+
+func exists(k string) bool {
+	err := db.View(func(txn *badger.Txn) error {
+		item, err := txn.Get([]byte(k))
+		if err != nil {
+			return err
+		}
+		_, err = item.Value()
+		return err
+	})
+	return err == nil
 }
