@@ -1,3 +1,11 @@
+.vs*
+bin/*
+Gopkg.lock
+vendor/*
+_vendor*
+.DS_Store
+*~
+
 # Binaries for programs and plugins
 snarfrss
 *.exe
