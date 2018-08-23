@@ -1,0 +1,10 @@
+rpc_url: "http://transmission-host:9091/transmission/rpc"
+username: "transmission_user"
+password: "transmission_pass"
+feeds:
+  - "https://feed1/rss"
+  - "https://feed2/rss"
+shows:
+  - "Title 1"
+  - "Title 2"
+  - "Title 3"
