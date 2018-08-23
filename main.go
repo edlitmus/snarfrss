@@ -62,8 +62,10 @@ func main() {
 		for _, item := range rss.Items {
 			for _, t := range shows.([]interface{}) {
 				r := regexp.MustCompile(fmt.Sprintf("(?i).*?%s.*?", t.(string)))
+				seenIt := exists(item.Title)
+				matches := r.MatchString(item.Title)
 
-				if r.MatchString(item.Title) && !exists(item.Title) {
+				if matches && !seenIt {
 					fmt.Printf("Found: %s\n", item.Title)
 					auth := basicAuth(rpcURL, username, password)
 					err := sendMagnet(rpcURL, auth, username, password, item.Link)
@@ -74,6 +76,9 @@ func main() {
 					if err != nil {
 						log.Println(err)
 					}
+				} else if matches {
+					fmt.Printf("already processed %s\n", item.Title)
+					break
 				}
 			}
 		}
