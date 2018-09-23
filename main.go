@@ -44,6 +44,7 @@ func main() {
 	initConfig(configFile, config)
 
 	db = getKVDB(configDir)
+	defer db.Close()
 	fp := gofeed.NewParser()
 
 	rpcURL := config.Get("rpc_url").(string)
@@ -62,31 +63,27 @@ func main() {
 		for _, item := range rss.Items {
 			for _, t := range shows.([]interface{}) {
 				r := regexp.MustCompile(fmt.Sprintf("(?i).*?%s.*?", t.(string)))
-				seenIt := exists(item.Title)
-				matches := r.MatchString(item.Title)
+				keyString := getKVStringFromTitle(item.Title)
+				seenIt := exists(keyString)
+				matches := r.MatchString(keyString)
 
 				if matches && !seenIt {
-					fmt.Printf("Found: %s\n", item.Title)
+					fmt.Printf("Found: %s\n", keyString)
 					auth := basicAuth(rpcURL, username, password)
 					err := sendMagnet(rpcURL, auth, username, password, item.Link)
 					if err != nil {
 						log.Println(err)
 					}
-					err = seen(item.Title, "true")
+					err = seen(keyString, "true")
 					if err != nil {
 						log.Println(err)
 					}
 				} else if matches {
-					fmt.Printf("already processed %s\n", item.Title)
+					fmt.Printf("already processed %s\n", keyString)
 					break
 				}
 			}
 		}
-	}
-
-	err := db.Close()
-	if err != nil {
-		log.Fatalf("error closing db: %s", err)
 	}
 }
 
@@ -107,12 +104,12 @@ func sendMagnet(url string, auth string, user string, pass string, link string) 
 	req.Header.Add(strings.Trim(authParts[0], " "), strings.Trim(authParts[1], " "))
 	req.SetBasicAuth(user, pass)
 	client := &http.Client{}
-	fmt.Printf("%#v\n", req)
+	// fmt.Printf("%#v\n", req)
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("%#v\n", resp)
+	// fmt.Printf("%#v\n", resp)
 	err = resp.Body.Close()
 	if err != nil {
 		log.Fatal(err)
@@ -203,6 +200,12 @@ func initConfig(configFile string, config *yaml.Yaml) {
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+func getKVStringFromTitle(title string) string {
+	re 	  := regexp.MustCompile(`(?mi)(.*?)\s+(S\d+E\d+).*?(\d+p)`)
+	parts := re.FindStringSubmatch(title)
+	return strings.Join(parts, " ")
 }
 
 func seen(k string, v string) error {

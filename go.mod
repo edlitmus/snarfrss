@@ -5,7 +5,7 @@ require (
 	github.com/PuerkitoBio/goquery v1.4.1 // indirect
 	github.com/andybalholm/cascadia v1.0.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/dgraph-io/badger v1.5.3
+	github.com/dgraph-io/badger v1.5.4
 	github.com/dgryski/go-farm v0.0.0-20180109070241-2de33835d102 // indirect
 	github.com/esilva-everbridge/dig v0.0.0-20180223224648-c61b8cdf35b7 // indirect
 	github.com/esilva-everbridge/yaml v0.0.0-20180228212815-c24d151cf388
