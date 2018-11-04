@@ -11,6 +11,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/dgraph-io/badger"
@@ -64,23 +65,30 @@ func main() {
 			for _, t := range shows.([]interface{}) {
 				r := regexp.MustCompile(fmt.Sprintf("(?i).*?%s.*?", t.(string)))
 				keyString := getKVStringFromTitle(item.Title)
-				seenIt := exists(keyString)
-				matches := r.MatchString(keyString)
+				r = regexp.MustCompile(`(?mi).*?(\d+)p`)
+				resStrs := r.FindStringSubmatch(keyString)
+				if len(resStrs) > 0 {
+					res, _ := strconv.ParseInt(resStrs[1], 10, 0)
+					if res > 720 {
+						seenIt := exists(keyString)
+						matches := r.MatchString(keyString)
 
-				if matches && !seenIt {
-					fmt.Printf("Found: %s\n", keyString)
-					auth := basicAuth(rpcURL, username, password)
-					err := sendMagnet(rpcURL, auth, username, password, item.Link)
-					if err != nil {
-						log.Println(err)
+						if matches && !seenIt {
+							fmt.Printf("Found: %s\n", keyString)
+							auth := basicAuth(rpcURL, username, password)
+							err := sendMagnet(rpcURL, auth, username, password, item.Link)
+							if err != nil {
+								log.Println(err)
+							}
+							err = seen(keyString, "true")
+							if err != nil {
+								log.Println(err)
+							}
+						} else if matches {
+							fmt.Printf("already processed %s\n", keyString)
+							break
+						}
 					}
-					err = seen(keyString, "true")
-					if err != nil {
-						log.Println(err)
-					}
-				} else if matches {
-					fmt.Printf("already processed %s\n", keyString)
-					break
 				}
 			}
 		}
