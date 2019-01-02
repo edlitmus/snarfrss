@@ -10,11 +10,13 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
 
-	"github.com/dgraph-io/badger"
+
+	"github.com/go-redis/redis"
 	yaml "github.com/esilva-everbridge/yaml"
 	"github.com/mmcdole/gofeed"
 	"golang.org/x/net/html"
@@ -35,24 +37,24 @@ type Request struct {
 	Arguments Args   `json:"arguments"`
 }
 
-var db *badger.DB
+var db *redis.Client
 
 func main() {
-	config := yaml.New()
-
-	configFile := createConfigPath()
-	configDir := filepath.Dir(configFile)
-	initConfig(configFile, config)
-
-	db = getKVDB(configDir)
-	defer db.Close()
 	fp := gofeed.NewParser()
+	config := yaml.New()
+	configFile := createConfigPath()
+	initConfig(configFile, config)
 
 	rpcURL := config.Get("rpc_url").(string)
 	username := config.Get("username").(string)
 	password := config.Get("password").(string)
+	dbConf := config.Get("db")
 	feeds := config.Get("feeds")
-	shows := config.Get("shows")
+	shows := config.Get("titles")
+
+	fmt.Printf("dbConf: #%v\n", dbConf)
+
+	db = newClient(dbConf)
 
 	for _, feed := range feeds.([]interface{}) {
 		rss, err := fp.ParseURL(feed.(string))
@@ -63,14 +65,18 @@ func main() {
 		fmt.Println(rss.Title)
 		for _, item := range rss.Items {
 			for _, t := range shows.([]interface{}) {
-				r := regexp.MustCompile(fmt.Sprintf("(?i).*?%s.*?", t.(string)))
-				keyString := getKVStringFromTitle(item.Title)
-				seenIt := exists(keyString)
+				r := regexp.MustCompile(fmt.Sprintf("(?mi).*?%s.*?", t.(string)))
+				parts := getKVStringFromTitle(item.Title)
+				if len(parts) == 0 {
+					continue
+				}
+				keyString := parts["title"].(string)
+				seenIt := exists(keyString, parts)
 				matches := r.MatchString(keyString)
 
 				if matches && !seenIt {
-					r = regexp.MustCompile(`(?mi).*?(\d+)p`)
-					resStrs := r.FindStringSubmatch(keyString)
+					r = regexp.MustCompile(`(?mi)(\d+)p`)
+					resStrs := r.FindStringSubmatch(parts["resolution"].(string))
 					if len(resStrs) > 0 {
 						res, _ := strconv.ParseInt(resStrs[1], 10, 0)
 						if res > 720 {
@@ -80,19 +86,35 @@ func main() {
 							if err != nil {
 								log.Println(err)
 							}
-							err = seen(keyString, "true")
+							err = seen(keyString, parts)
 							if err != nil {
 								log.Println(err)
 							}
 						}
 					}
-				} else if matches {
+				} else if matches && seenIt {
 					fmt.Printf("already processed %s\n", keyString)
 					break
 				}
 			}
 		}
 	}
+}
+
+func newClient(dbConfig interface{}) *redis.Client {
+	conf := dbConfig.(map[interface{}]interface{})
+	client := redis.NewClient(&redis.Options{
+		Addr:     fmt.Sprintf("%s:%d", conf["host"].(string), conf["port"].(int)),
+		Password: fmt.Sprintf("%s", conf["pass"].(string)),
+		DB:       conf["id"].(int),
+	})
+
+	_, err := client.Ping().Result()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return client
 }
 
 func sendMagnet(url string, auth string, user string, pass string, link string) error {
@@ -187,18 +209,6 @@ func createConfigPath() string {
 	return configFile
 }
 
-func getKVDB(configDir string) *badger.DB {
-	var err error
-	opts := badger.DefaultOptions
-	opts.Dir = fmt.Sprintf("%s/db", configDir)
-	opts.ValueDir = fmt.Sprintf("%s/db", configDir)
-	db, err = badger.Open(opts)
-	if err != nil {
-		log.Fatal(err)
-	}
-	return db
-}
-
 func initConfig(configFile string, config *yaml.Yaml) {
 	buf, err := ioutil.ReadFile(configFile)
 	if err != nil {
@@ -210,28 +220,37 @@ func initConfig(configFile string, config *yaml.Yaml) {
 	}
 }
 
-func getKVStringFromTitle(title string) string {
-	re 	  := regexp.MustCompile(`(?mi)(.*?)\s+(S\d+E\d+).*?(\d+p)`)
+func getKVStringFromTitle(title string) map[string]interface{} {
+	re 	  := regexp.MustCompile(`(?mi)(.*?)\s+S(\d+)E(\d+).*?(\d+p)`)
 	parts := re.FindStringSubmatch(title)
-	return strings.Join(parts, " ")
+	if len(parts) > 0 {
+		info := make(map[string]interface{})
+		info["title"] 		= parts[0]
+		info["series"] 		= parts[1]
+		info["season"] 		= parts[2]
+		info["episode"] 	= parts[3]
+		info["resolution"] 	= parts[4]
+		return info
+	}
+	return nil
 }
 
-func seen(k string, v string) error {
-	err := db.Update(func(txn *badger.Txn) error {
-		err := txn.Set([]byte(k), []byte(v))
-		return err
-	})
-	return err
+func seen(k string, v map[string]interface{}) error {
+	return db.HMSet(k, v).Err()
 }
 
-func exists(k string) bool {
-	err := db.View(func(txn *badger.Txn) error {
-		item, err := txn.Get([]byte(k))
-		if err != nil {
-			return err
-		}
-		_, err = item.Value()
-		return err
-	})
+func exists(k string, v map[string]interface{}) bool {
+	keys := reflect.ValueOf(v).MapKeys()
+	var args []string
+	for _, key := range keys {
+		args = append(args, key.String())
+	}
+	_, err := db.HMGet(k, args...).Result()
+	if err == redis.Nil {
+		return true
+	} else if err != nil {
+		log.Fatal(err)
+	}
+
 	return err == nil
 }

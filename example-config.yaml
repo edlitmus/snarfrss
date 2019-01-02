@@ -1,10 +1,22 @@
+# redis type DB
+db:
+  pass: "password"
+  host: "hostname"
+  port: 1234
+  id: 0
+
+# transmission RPC URL
 rpc_url: "http://transmission-host:9091/transmission/rpc"
 username: "transmission_user"
 password: "transmission_pass"
+
+# RSS feed list
 feeds:
   - "https://feed1/rss"
   - "https://feed2/rss"
-shows:
+
+# titles to look for
+titles:
   - "Title 1"
   - "Title 2"
   - "Title 3"
