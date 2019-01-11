@@ -52,7 +52,7 @@ func main() {
 	feeds := config.Get("feeds")
 	shows := config.Get("titles")
 
-	fmt.Printf("dbConf: #%v\n", dbConf)
+//	fmt.Printf("dbConf: #%v\n", dbConf)
 
 	db = newClient(dbConf)
 
@@ -71,6 +71,7 @@ func main() {
 					continue
 				}
 				keyString := parts["title"].(string)
+//				fmt.Printf("key: %s\n", keyString)
 				seenIt := exists(keyString, parts)
 				matches := r.MatchString(keyString)
 
@@ -221,8 +222,9 @@ func initConfig(configFile string, config *yaml.Yaml) {
 }
 
 func getKVStringFromTitle(title string) map[string]interface{} {
-	re 	  := regexp.MustCompile(`(?mi)(.*?)\s+S(\d+)E(\d+).*?(\d+p)`)
+	re  := regexp.MustCompile(`(?mi)(.*?)\s+S(\d+)E(\d+).*?(\d+p)`)
 	parts := re.FindStringSubmatch(title)
+	fmt.Printf("#%v\n", parts)
 	if len(parts) > 0 {
 		info := make(map[string]interface{})
 		info["title"] 		= parts[0]
@@ -245,8 +247,11 @@ func exists(k string, v map[string]interface{}) bool {
 	for _, key := range keys {
 		args = append(args, key.String())
 	}
-	_, err := db.HMGet(k, args...).Result()
-	if err == redis.Nil {
+	d, err := db.HMGet(k, args...).Result()
+//	fmt.Printf("DATA: #%v\n", d)
+	if d[0] == nil {
+		return false
+	} else if err == redis.Nil {
 		return true
 	} else if err != nil {
 		log.Fatal(err)
