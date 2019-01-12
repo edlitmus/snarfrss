@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
-	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -35,6 +34,15 @@ type Args struct {
 type Request struct {
 	Method    string `json:"method"`
 	Arguments Args   `json:"arguments"`
+}
+
+// Info type
+type Info struct {
+	Title 		string
+	Series 		string
+	Season 		string
+	Episode 	string
+	Resolution 	string
 }
 
 var db *redis.Client
@@ -63,21 +71,27 @@ func main() {
 		}
 
 		fmt.Println(rss.Title)
+
+ITEMS:
 		for _, item := range rss.Items {
+			parts := getKVStringFromTitle(item.Title)
+			if parts.Title == "" {
+				continue ITEMS
+			}
+			keyString := parts.Title
+			seenIt := exists(parts)
+			if seenIt {
+				fmt.Printf("seen: %s\n", keyString)
+				continue ITEMS
+			}
+
 			for _, t := range shows.([]interface{}) {
 				r := regexp.MustCompile(fmt.Sprintf("(?mi).*?%s.*?", t.(string)))
-				parts := getKVStringFromTitle(item.Title)
-				if len(parts) == 0 {
-					continue
-				}
-				keyString := parts["title"].(string)
-//				fmt.Printf("key: %s\n", keyString)
-				seenIt := exists(keyString, parts)
 				matches := r.MatchString(keyString)
 
 				if matches && !seenIt {
 					r = regexp.MustCompile(`(?mi)(\d+)p`)
-					resStrs := r.FindStringSubmatch(parts["resolution"].(string))
+					resStrs := r.FindStringSubmatch(parts.Resolution)
 					if len(resStrs) > 0 {
 						res, _ := strconv.ParseInt(resStrs[1], 10, 0)
 						if res > 720 {
@@ -87,7 +101,7 @@ func main() {
 							if err != nil {
 								log.Println(err)
 							}
-							err = seen(keyString, parts)
+							err = seen(parts)
 							if err != nil {
 								log.Println(err)
 							}
@@ -95,7 +109,7 @@ func main() {
 					}
 				} else if matches && seenIt {
 					fmt.Printf("already processed %s\n", keyString)
-					break
+					continue ITEMS
 				}
 			}
 		}
@@ -221,41 +235,49 @@ func initConfig(configFile string, config *yaml.Yaml) {
 	}
 }
 
-func getKVStringFromTitle(title string) map[string]interface{} {
+func getKVStringFromTitle(title string) Info {
 	re  := regexp.MustCompile(`(?mi)(.*?)\s+S(\d+)E(\d+).*?(\d+p)`)
 	parts := re.FindStringSubmatch(title)
-	fmt.Printf("#%v\n", parts)
 	if len(parts) > 0 {
-		info := make(map[string]interface{})
-		info["title"] 		= parts[0]
-		info["series"] 		= parts[1]
-		info["season"] 		= parts[2]
-		info["episode"] 	= parts[3]
-		info["resolution"] 	= parts[4]
+		info := Info{parts[0], parts[1], parts[2], parts[3], parts[4]}
 		return info
 	}
-	return nil
+	return Info{}
 }
 
-func seen(k string, v map[string]interface{}) error {
-	return db.HMSet(k, v).Err()
-}
-
-func exists(k string, v map[string]interface{}) bool {
-	keys := reflect.ValueOf(v).MapKeys()
-	var args []string
-	for _, key := range keys {
-		args = append(args, key.String())
+func seen(show Info) error {
+	j, err := show.MarshalBinary()
+	if err != nil {
+		log.Fatal(err)
 	}
-	d, err := db.HMGet(k, args...).Result()
-//	fmt.Printf("DATA: #%v\n", d)
-	if d[0] == nil {
+	return db.HSet(show.Title, "json", j).Err()
+}
+
+func exists(show Info) bool {
+	var cached Info
+	d, _ := db.HGet(show.Title, "json").Bytes()
+
+	if len(d) == 0 {
 		return false
-	} else if err == redis.Nil {
-		return true
-	} else if err != nil {
+	}
+
+	if err := cached.UnmarshalBinary(d); err != nil {
 		log.Fatal(err)
 	}
 
-	return err == nil
+	return cached.Title == show.Title
+}
+
+// MarshalBinary turn struct to json
+func (e *Info) MarshalBinary() ([]byte, error) {
+	return json.Marshal(e)
+}
+
+// UnmarshalBinary return struct from json
+func (e *Info) UnmarshalBinary(data []byte) error {
+	if err := json.Unmarshal(data, &e); err != nil {
+		return err
+	}
+
+	return nil
 }
