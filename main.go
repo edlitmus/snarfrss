@@ -86,6 +86,7 @@ ITEMS:
 			}
 
 			for _, t := range shows.([]interface{}) {
+//				fmt.Printf("Checking: %s\n", keyString)
 				r := regexp.MustCompile(fmt.Sprintf("(?mi).*?%s.*?", t.(string)))
 				matches := r.MatchString(keyString)
 
@@ -109,6 +110,8 @@ ITEMS:
 					}
 				} else if matches && seenIt {
 					fmt.Printf("already processed %s\n", keyString)
+					continue ITEMS
+				} else {
 					continue ITEMS
 				}
 			}
