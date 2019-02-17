@@ -111,9 +111,9 @@ ITEMS:
 				} else if matches && seenIt {
 					fmt.Printf("already processed %s\n", keyString)
 					continue ITEMS
-				} else {
-					continue ITEMS
-				}
+				} // } else {
+				// 	continue ITEMS
+				// }
 			}
 		}
 	}
