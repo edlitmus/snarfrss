@@ -15,6 +15,7 @@ require (
 	github.com/mmcdole/goxpp v0.0.0-20170720115402-77e4a51a73ed // indirect
 	github.com/onsi/ginkgo v1.7.0 // indirect
 	github.com/onsi/gomega v1.4.3 // indirect
+	github.com/pioz/tvdb v0.0.0-20190107104821-ffdf1011c717
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/stretchr/testify v1.2.2 // indirect
 	github.com/ugorji/go/codec v0.0.0-20181209151446-772ced7fd4c2 // indirect

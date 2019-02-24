@@ -14,10 +14,10 @@ import (
 	"strconv"
 	"strings"
 
-
-	"github.com/go-redis/redis"
 	yaml "github.com/esilva-everbridge/yaml"
+	"github.com/go-redis/redis"
 	"github.com/mmcdole/gofeed"
+	"github.com/pioz/tvdb"
 	"golang.org/x/net/html"
 	yamlv2 "gopkg.in/yaml.v2"
 )
@@ -38,13 +38,14 @@ type Request struct {
 
 // Info type
 type Info struct {
-	Title 		string
-	Series 		string
-	Season 		string
-	Episode 	string
-	Resolution 	string
+	Title      string
+	Series     string
+	Season     int
+	Episode    int
+	Resolution string
 }
 
+var tvdbc tvdb.Client
 var db *redis.Client
 
 func main() {
@@ -53,6 +54,7 @@ func main() {
 	configFile := createConfigPath()
 	initConfig(configFile, config)
 
+	tvDBConfig := config.Get("the_tvdb_api")
 	rpcURL := config.Get("rpc_url").(string)
 	username := config.Get("username").(string)
 	password := config.Get("password").(string)
@@ -60,8 +62,9 @@ func main() {
 	feeds := config.Get("feeds")
 	shows := config.Get("titles")
 
-//	fmt.Printf("dbConf: #%v\n", dbConf)
+	//	fmt.Printf("dbConf: #%v\n", dbConf)
 
+	tvdbc = tvdbClient(tvDBConfig)
 	db = newClient(dbConf)
 
 	for _, feed := range feeds.([]interface{}) {
@@ -72,23 +75,23 @@ func main() {
 
 		fmt.Println(rss.Title)
 
-ITEMS:
+	ITEMS:
 		for _, item := range rss.Items {
 			parts := getKVStringFromTitle(item.Title)
 			if parts.Title == "" {
 				continue ITEMS
 			}
-			keyString := parts.Title
-			seenIt := exists(parts)
-			if seenIt {
-				fmt.Printf("seen: %s\n", keyString)
-				continue ITEMS
-			}
+			keyString := fmt.Sprintf("%s-%d-%d-%s", parts.Series, parts.Season, parts.Episode, parts.Resolution)
 
 			for _, t := range shows.([]interface{}) {
-//				fmt.Printf("Checking: %s\n", keyString)
+				// fmt.Printf("Checking: %s\n", parts.Series)
 				r := regexp.MustCompile(fmt.Sprintf("(?mi).*?%s.*?", t.(string)))
-				matches := r.MatchString(keyString)
+				matches := r.MatchString(parts.Series)
+				seenIt := exists(keyString, parts)
+				if seenIt {
+					fmt.Printf("exists: %s\n", keyString)
+					continue ITEMS
+				}
 
 				if matches && !seenIt {
 					r = regexp.MustCompile(`(?mi)(\d+)p`)
@@ -102,7 +105,9 @@ ITEMS:
 							if err != nil {
 								log.Println(err)
 							}
-							err = seen(parts)
+							parts.Title = getEpisodeTitle(parts.Series, parts.Season, parts.Episode)
+							fmt.Printf("PARTS: #%v\n", parts)
+							err = seen(keyString, parts)
 							if err != nil {
 								log.Println(err)
 							}
@@ -115,6 +120,17 @@ ITEMS:
 			}
 		}
 	}
+}
+
+func tvdbClient(tvDBConfig interface{}) tvdb.Client {
+	conf := tvDBConfig.(map[interface{}]interface{})
+	c := tvdb.Client{Apikey: conf["api_key"].(string), Userkey: conf["user_key"].(string), Username: conf["username"].(string)}
+	err := c.Login()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return c
 }
 
 func newClient(dbConfig interface{}) *redis.Client {
@@ -155,7 +171,7 @@ func sendMagnet(url string, auth string, user string, pass string, link string) 
 	if err != nil {
 		log.Fatal(err)
 	}
-	// fmt.Printf("%#v\n", resp)
+	// fmt.Printf("RESP: %#v\n", resp)
 	err = resp.Body.Close()
 	if err != nil {
 		log.Fatal(err)
@@ -236,27 +252,46 @@ func initConfig(configFile string, config *yaml.Yaml) {
 	}
 }
 
+func getEpisodeTitle(series string, season int, episode int) string {
+	title := ""
+	s, err := tvdbc.BestSearch(series)
+	if err != nil {
+		log.Printf("Series Search Error: %s\n", err)
+	} else {
+		err = tvdbc.GetSeriesEpisodes(&s, nil)
+		if err != nil {
+			log.Printf("Get Episode Error: %s\n", err)
+		} else {
+			title = s.GetEpisode(season, episode).EpisodeName
+		}
+	}
+
+	return title
+}
+
 func getKVStringFromTitle(title string) Info {
-	re  := regexp.MustCompile(`(?mi)(.*?)\s+S(\d+)E(\d+).*?(\d+p)`)
+	re := regexp.MustCompile(`(?mi)(.*?)\s+S(\d+)E(\d+).*?(\d+p)`)
 	parts := re.FindStringSubmatch(title)
 	if len(parts) > 0 {
-		info := Info{parts[0], parts[1], parts[2], parts[3], parts[4]}
+		s, _ := strconv.Atoi(parts[2])
+		e, _ := strconv.Atoi(parts[3])
+		info := Info{Title: parts[0], Series: parts[1], Season: s, Episode: e, Resolution: parts[4]}
 		return info
 	}
 	return Info{}
 }
 
-func seen(show Info) error {
+func seen(key string, show Info) error {
 	j, err := show.MarshalBinary()
 	if err != nil {
 		log.Fatal(err)
 	}
-	return db.HSet(show.Title, "json", j).Err()
+	return db.HSet(key, "json", j).Err()
 }
 
-func exists(show Info) bool {
+func exists(key string, show Info) bool {
 	var cached Info
-	d, _ := db.HGet(show.Title, "json").Bytes()
+	d, _ := db.HGet(key, "json").Bytes()
 
 	if len(d) == 0 {
 		return false
@@ -266,7 +301,7 @@ func exists(show Info) bool {
 		log.Fatal(err)
 	}
 
-	return cached.Title == show.Title
+	return true
 }
 
 // MarshalBinary turn struct to json

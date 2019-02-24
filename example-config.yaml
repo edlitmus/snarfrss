@@ -5,6 +5,12 @@ db:
   port: 1234
   id: 0
 
+# thetvdb api info
+the_tvdb_api:
+  username: "YOURUSERNAME"
+  user_key: "YOURUSERKEY"
+  api_key: "YOURAPIKEY"
+
 # transmission RPC URL
 rpc_url: "http://transmission-host:9091/transmission/rpc"
 username: "transmission_user"
