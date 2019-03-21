@@ -262,7 +262,10 @@ func getEpisodeTitle(series string, season int, episode int) string {
 		if err != nil {
 			log.Printf("Get Episode Error: %s\n", err)
 		} else {
-			title = s.GetEpisode(season, episode).EpisodeName
+			ep := s.GetEpisode(season, episode)
+			if (ep != nil) {
+				title = ep.EpisodeName
+			}
 		}
 	}
 
