@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gosuri/uiprogress"
 	yaml "github.com/esilva-everbridge/yaml"
 	"github.com/go-redis/redis"
 	"github.com/mmcdole/gofeed"
@@ -73,10 +74,15 @@ func main() {
 			log.Fatal(err)
 		}
 
-		fmt.Println(rss.Title)
-
+		uiprogress.Start()
+		fbar := uiprogress.AddBar(len(rss.Items))
+		fbar.PrependFunc(func(b *uiprogress.Bar) string {
+			return fmt.Sprintf("%s: ", rss.Title)
+		})
+		
 	ITEMS:
 		for _, item := range rss.Items {
+			fbar.Incr()
 			parts := getKVStringFromTitle(item.Title)
 			if parts.Title == "" {
 				continue ITEMS
