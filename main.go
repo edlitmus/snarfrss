@@ -19,7 +19,7 @@ import (
 	"github.com/mmcdole/gofeed"
 	"github.com/pioz/tvdb"
 	"golang.org/x/net/html"
-	yamlv2 "gopkg.in/yaml.v2"
+	yamlv3 "gopkg.in/yaml.v3"
 )
 
 // {\"method\":\"torrent-add\",\"arguments\":{\"paused\":false,\"filename\":\"%s\"}}
@@ -246,7 +246,7 @@ func initConfig(configFile string, config *yaml.Yaml) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = yamlv2.Unmarshal(buf, &config.Values)
+	err = yamlv3.Unmarshal(buf, &config.Values)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -263,7 +263,7 @@ func getEpisodeTitle(series string, season int, episode int) string {
 			log.Printf("Get Episode Error: %s\n", err)
 		} else {
 			ep := s.GetEpisode(season, episode)
-			if (ep != nil) {
+			if ep != nil {
 				title = ep.EpisodeName
 			}
 		}
