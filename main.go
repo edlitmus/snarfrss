@@ -14,11 +14,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gosuri/uiprogress"
 	yaml "github.com/esilva-everbridge/yaml"
 	"github.com/go-redis/redis"
 	"github.com/mmcdole/gofeed"
 	"github.com/pioz/tvdb"
+	"github.com/schollz/progressbar/v2"
 	"golang.org/x/net/html"
 	yamlv2 "gopkg.in/yaml.v2"
 )
@@ -74,15 +74,13 @@ func main() {
 			log.Fatal(err)
 		}
 
-		uiprogress.Start()
-		fbar := uiprogress.AddBar(len(rss.Items))
-		fbar.PrependFunc(func(b *uiprogress.Bar) string {
-			return fmt.Sprintf("%s: ", rss.Title)
-		})
-		
+		barLen := len(rss.Items)
+		bar := progressbar.NewOptions(barLen)
+		_ = bar.RenderBlank()
+
 	ITEMS:
 		for _, item := range rss.Items {
-			fbar.Incr()
+			_ = bar.Add(1)
 			parts := getKVStringFromTitle(item.Title)
 			if parts.Title == "" {
 				continue ITEMS
@@ -269,7 +267,7 @@ func getEpisodeTitle(series string, season int, episode int) string {
 			log.Printf("Get Episode Error: %s\n", err)
 		} else {
 			ep := s.GetEpisode(season, episode)
-			if (ep != nil) {
+			if ep != nil {
 				title = ep.EpisodeName
 			}
 		}
