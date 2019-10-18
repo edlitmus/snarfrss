@@ -74,27 +74,26 @@ func main() {
 			log.Fatal(err)
 		}
 
+		barLen := len(rss.Items)
+		bar := progressbar.NewOptions(barLen)
+		_ = bar.RenderBlank()
+
 	ITEMS:
 		for _, item := range rss.Items {
+			_ = bar.Add(1)
 			parts := getKVStringFromTitle(item.Title)
 			if parts.Title == "" {
 				continue ITEMS
 			}
 			keyString := fmt.Sprintf("%s-%d-%d-%s", parts.Series, parts.Season, parts.Episode, parts.Resolution)
 
-			barLen := len(shows.([]interface{}))
-			bar := progressbar.NewOptions(barLen)
-			_ = bar.RenderBlank()
-
 			for _, t := range shows.([]interface{}) {
-				fmt.Printf("\x0c")
-				_ = bar.Add(1)
 				// fmt.Printf("Checking: %s\n", parts.Series)
 				r := regexp.MustCompile(fmt.Sprintf("(?mi).*?%s.*?", t.(string)))
 				matches := r.MatchString(parts.Series)
 				seenIt := exists(keyString, parts)
 				if seenIt {
-					fmt.Printf("exists: %s\n", keyString)
+					// fmt.Printf("exists: %s\n", keyString)
 					continue ITEMS
 				}
 
