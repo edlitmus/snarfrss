@@ -75,8 +75,7 @@ func main() {
 		}
 
 		barLen := len(rss.Items)
-		bar := progressbar.NewOptions(barLen)
-		_ = bar.RenderBlank()
+		bar := progressbar.NewOptions(barLen, progressbar.OptionSetRenderBlankState(true))
 
 	ITEMS:
 		for _, item := range rss.Items {
