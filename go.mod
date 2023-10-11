@@ -7,7 +7,7 @@ require (
 	github.com/go-redis/redis v6.15.9+incompatible
 	github.com/mmcdole/gofeed v1.2.0
 	github.com/pioz/tvdb v0.0.0-20221212235421-03519fb7a0e2
-	golang.org/x/net v0.7.0
+	golang.org/x/net v0.17.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -24,5 +24,5 @@ require (
 	github.com/onsi/ginkgo v1.16.5 // indirect
 	github.com/onsi/gomega v1.27.1 // indirect
 	github.com/stretchr/testify v1.5.1 // indirect
-	golang.org/x/text v0.7.0 // indirect
+	golang.org/x/text v0.13.0 // indirect
 )
