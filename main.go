@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"strings"
 
-	yaml "github.com/esilva-everbridge/yaml"
+	yaml "github.com/edlitmus/ezyaml"
 	"github.com/go-redis/redis"
 	"github.com/mmcdole/gofeed"
 	"github.com/pioz/tvdb"
